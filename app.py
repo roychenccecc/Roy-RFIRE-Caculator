@@ -1,5 +1,5 @@
 # ---------------------------------------------------
-# 你的第九台 RFIRE 财富推演机 (V7.0 记忆胶囊与下载版)
+# 你的第十台 RFIRE 财富推演机 (V8.0 终极交互修复版)
 # ---------------------------------------------------
 
 import streamlit as st
@@ -11,17 +11,11 @@ st.sidebar.header("👤 0. 定制你的专属计划")
 user_name = st.sidebar.text_input("请输入你的称呼：", value="探索者")
 st.title(f"🔥 {user_name} 的 RFIRE 财务路径推演系统")
 
-with st.expander("💡 点击阅读：这套系统背后的硬核量化逻辑（新手必看）", expanded=False):
+with st.expander("💡 点击阅读：这套系统背后的硬核量化逻辑", expanded=False):
     st.markdown("""
-    ### 欢迎来到真实世界的财务沙盘
-    这不仅仅是一个复利计算器，而是一套严谨的**全生命周期财富推演系统**。传统的 FIRE（提前退休）理论往往忽略了真实世界的摩擦成本，本系统通过三大核心引擎，帮你寻找最坚固的安全边际：
-
-    * **🛡️ 引擎一：购买力平价 (真正的抗通胀)**
-        系统强制扣除【通胀磨损资金】。只有当你扣除通胀后，剩下的“真实被动收益”依然能覆盖日常开销，才算真正的永续 FIRE。
-    * **⚙️ 引擎二：生命周期状态机 (动态的人生阶段)**
-        到达“最多工作年限”后，系统会自动切断打工收入；触发 FIRE 状态后，自动切换至“退休后开支”。
-    * **🧠 引擎三：智能预填与精细微调 (颗粒度管控)**
-        支持基础参数一键预填，并随时双击表格修改特定年份的超额收益或空窗期。
+    * **🛡️ 购买力平价：** 强制扣除通胀磨损资金，寻找真实的永续 FIRE 奇点。
+    * **⚙️ 动态生命周期：** 到达设定工作年限后，主动收入自动断绝，开支切换至退休标准。
+    * **🧠 智能底表：** 基础参数一键生成未来 30 年现金流，支持双击表格微调特定年份特殊收入。
     """)
 
 # --- 左侧边栏参数 ---
@@ -48,6 +42,7 @@ income_mode = st.radio(
 
 table_years = int(max_working_years)
 
+# 提取参数，防止未定义错误
 if "智能预填" in income_mode:
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -56,63 +51,84 @@ if "智能预填" in income_mode:
         raise_rate = st.number_input("预计每年涨薪比例 (%)", value=5.0, step=0.5) / 100
     with col3:
         base_bonus = st.number_input("预计年终奖 (元/年)", value=50000, step=5000)
-    # 把当前设置打包成一个“参数指纹”，用于判断用户是否修改了基础设定
     current_params = f"{base_monthly}_{raise_rate}_{base_bonus}"
 else:
+    base_monthly, raise_rate, base_bonus = 20000.0, 0.05, 50000.0 # 占位符
     current_params = "manual"
 
-# ==========================================
-# 【V7.0 黑科技：记忆胶囊 Session State】
-# ==========================================
-# 1. 如果这是用户刚打开网页，初始化保险箱
-if "income_df" not in st.session_state:
-    st.session_state.income_df = pd.DataFrame()
-    st.session_state.last_years = 0
-    st.session_state.last_params = ""
-    st.session_state.last_mode = ""
-
-# 2. 触发条件 A：用户切换了模式，或者修改了“当前月薪/涨薪率”等基础设定 -> 重新生成整张表
-if st.session_state.last_mode != income_mode or st.session_state.last_params != current_params:
-    default_data = []
-    if "智能预填" in income_mode:
-        c_m = base_monthly
-        for i in range(table_years):
-            default_data.append({"工作年份": f"第 {i+1} 年", "预期月收入(元)": round(c_m, 2), "预期年终奖(元)": base_bonus})
-            c_m *= (1 + raise_rate)
+# 辅助函数：生成默认白板表格
+def get_default_df(mode, years, b_m, r_r, b_b):
+    data = []
+    if "智能预填" in mode:
+        c_m = b_m
+        for i in range(years):
+            data.append({"工作年份": f"第 {i+1} 年", "预期月收入(元)": round(c_m, 2), "预期年终奖(元)": b_b})
+            c_m *= (1 + r_r)
     else:
-        for i in range(table_years):
-            default_data.append({"工作年份": f"第 {i+1} 年", "预期月收入(元)": 20000.0, "预期年终奖(元)": 50000.0})
-    st.session_state.income_df = pd.DataFrame(default_data)
+        for i in range(years):
+            data.append({"工作年份": f"第 {i+1} 年", "预期月收入(元)": 20000.0, "预期年终奖(元)": 50000.0})
+    return pd.DataFrame(data)
 
-# 3. 触发条件 B：基础设定没变，只是拖动了【工作年限】 -> 继承记忆，多退少补
-elif st.session_state.last_years != table_years:
-    current_df = st.session_state.income_df
+# ==========================================
+# 【V8.0 终极状态管理机制】
+# ==========================================
+# 1. 首次打开网页，初始化核心记忆
+if "base_df" not in st.session_state:
+    st.session_state.base_df = get_default_df(income_mode, table_years, base_monthly, raise_rate, base_bonus)
+    st.session_state.latest_edited_df = st.session_state.base_df.copy() # 记录最新被编辑过的状态
+    st.session_state.last_mode = income_mode
+    st.session_state.last_params = current_params
+    st.session_state.last_years = table_years
+
+# 2. 检查你是否修改了影响“基本盘”的参数
+mode_changed = (st.session_state.last_mode != income_mode)
+params_changed = (st.session_state.last_params != current_params)
+years_changed = (st.session_state.last_years != table_years)
+
+if mode_changed or params_changed:
+    # 如果切换了模式或修改了基础工资，直接重置全新表格
+    st.session_state.base_df = get_default_df(income_mode, table_years, base_monthly, raise_rate, base_bonus)
+    # 【核心】：清空底层编辑器的缓存记录，防止幽灵数据
+    if "income_table" in st.session_state:
+        del st.session_state["income_table"]
+        
+elif years_changed:
+    # 【修复重点】：如果只改了工作年限，从你“最后一次编辑过的表格”里去多退少补！
+    current_df = st.session_state.latest_edited_df
     current_len = len(current_df)
     
     if table_years > current_len:
-        # 增加年限：补齐背后的空白行（极其人性化的设计：直接复制最后一年的收入作为后续的默认值）
+        # 加长年限：贴心地复制最后一年的收入填进去
         last_income = current_df.iloc[-1]["预期月收入(元)"] if current_len > 0 else 20000.0
         last_bonus = current_df.iloc[-1]["预期年终奖(元)"] if current_len > 0 else 50000.0
-        new_rows = []
-        for i in range(current_len, table_years):
-            new_rows.append({"工作年份": f"第 {i+1} 年", "预期月收入(元)": last_income, "预期年终奖(元)": last_bonus})
-        st.session_state.income_df = pd.concat([current_df, pd.DataFrame(new_rows)], ignore_index=True)
-        
+        new_rows = [{"工作年份": f"第 {i+1} 年", "预期月收入(元)": last_income, "预期年终奖(元)": last_bonus} for i in range(current_len, table_years)]
+        st.session_state.base_df = pd.concat([current_df, pd.DataFrame(new_rows)], ignore_index=True)
     elif table_years < current_len:
-        # 减少年限：直接砍掉多出的行数
-        st.session_state.income_df = current_df.head(table_years)
+        # 缩短年限：直接裁掉尾巴
+        st.session_state.base_df = current_df.head(table_years)
+        
+    # 把最新的合成表当做新的底座，清空缓存准备迎接新编辑
+    if "income_table" in st.session_state:
+        del st.session_state["income_table"]
 
-# 4. 把当前状态存入保险箱，供下次对比使用
+# 更新记忆锚点
 st.session_state.last_mode = income_mode
 st.session_state.last_params = current_params
 st.session_state.last_years = table_years
 
-# 5. 展示表格，并把用户在网页上敲入的最新修改，实时存回保险箱
+# 3. 呼出终极形态的数据表格（注意 key="income_table" 这个灵魂参数）
 st.markdown(f"👇 **你的打工生涯预计还有 {table_years} 年。你可以双击任意数字进行修改：**")
-edited_df = st.data_editor(st.session_state.income_df, use_container_width=True, hide_index=True)
-st.session_state.income_df = edited_df
+edited_df = st.data_editor(
+    st.session_state.base_df, 
+    key="income_table", # 绑定身份证，绝不再丢失焦点
+    use_container_width=True, 
+    hide_index=True
+)
 
-# 提取表格数据进入系统核心引擎
+# 4. 把用户最后改好的表格死死记住，给上面的 elif 备用
+st.session_state.latest_edited_df = edited_df
+
+# 5. 提取数据进入发动机引擎
 yearly_total_income_list = []
 for index, row in edited_df.iterrows():
     total_annual = (row["预期月收入(元)"] * 12) + row["预期年终奖(元)"]
@@ -179,10 +195,8 @@ df_result_display = df_result.copy()
 df_result_display["推演年份"] = df_result_display["推演年份"].apply(lambda x: f"第 {x} 年")
 st.dataframe(df_result_display, use_container_width=True)
 
-# 【V7.0 新增功能：一键导出 CSV】
 st.divider()
 st.markdown("### 💾 保存你的推演计划")
-# utf-8-sig 编码是为了保证国内用户用 Excel 打开时不出现中文乱码
 csv_data = df_result_display.to_csv(index=False).encode('utf-8-sig')
 
 st.download_button(
@@ -190,5 +204,5 @@ st.download_button(
     data=csv_data,
     file_name=f"{user_name}的RFIRE推演计划.csv",
     mime="text/csv",
-    type="primary" # 把按钮变成显眼的红色/主色调
+    type="primary"
 )
