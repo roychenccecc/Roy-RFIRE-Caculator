@@ -1,5 +1,5 @@
 # ---------------------------------------------------
-# 你的第十七台 RFIRE 财富推演机 (V15.0 极致现实与独立养老金版)
+# 你的第十八台 RFIRE 财富推演机 (V16.0 原教旨主义纯粹 FIRE 版)
 # ---------------------------------------------------
 
 import streamlit as st
@@ -9,14 +9,14 @@ st.set_page_config(page_title="RFIRE 财富推演系统", page_icon="🔥", layo
 
 st.sidebar.header("👤 0. 定制你的专属计划")
 user_name = st.sidebar.text_input("请输入你的称呼：", value="探索者")
-st.title(f"🔥 {user_name} 的 RFIRE 财务路径推演系统 (V15.0 极致现实版)")
+st.title(f"🔥 {user_name} 的 RFIRE 财务路径推演系统 (V16.0 纯粹 FIRE 版)")
 
 with st.expander("💡 点击阅读：这套系统背后的硬核量化逻辑", expanded=False):
     st.markdown("""
     * **🛡️ 购买力平价：** 强制扣除通胀磨损，寻找真实的永续 FIRE 奇点。
-    * **⚙️ 动态生命周期：** 引入真实年龄轴。彻底辞职后切换退休开支标准。
+    * **⚙️ 原教旨 FIRE 定义：** 拒绝“伪自由”。严格定义为：**纯抗通胀理财收益 > 当年所有实际开支（含黑天鹅）**。即使领着养老金或打着工，理财收益不达标也不标记为 FIRE。
     * **⚖️ 命运平衡双轨：** 独立定制未来的黑天鹅(意外开支)与正向期权(意外收入)。
-    * **🌉 养老底座与真实涨幅：** 养老金涨幅与物价通胀彻底脱钩，直面商业年金购买力缩水或社保增速放缓的残酷现实。
+    * **🌉 养老金底座真实涨幅：** 养老金独立计算涨幅，直面通胀侵蚀。
     """)
 
 # --- 左侧边栏参数 ---
@@ -37,11 +37,10 @@ st.sidebar.header("📈 3. 市场与环境假设")
 annual_return_rate = st.sidebar.number_input("预期名义年化收益率 (%)", value=8.0, step=0.5) / 100
 annual_inflation_rate = st.sidebar.number_input("预计年通胀率 (%)", value=3.0, step=0.5) / 100
 
-st.sidebar.header("🛡️ 4. 养老金底座 (硬核风控)")
-monthly_pension = st.sidebar.number_input("预计退休金基数 (元/月)", value=3000, step=500, help="指你开始领取那第一年的每月名义金额")
+st.sidebar.header("🛡️ 4. 养老金底座")
+monthly_pension = st.sidebar.number_input("预计退休金基数 (元/月)", value=3000, step=500)
 pension_age = st.sidebar.number_input("法定领养老金年龄 (岁)", value=60, min_value=current_age, max_value=100)
-# 【V15.0 核心新增】：养老金独立涨幅
-pension_growth_rate = st.sidebar.number_input("预计养老金每年涨幅 (%)", value=1.5, step=0.5, help="社保通常在1%-4%，商业年金为0%") / 100
+pension_growth_rate = st.sidebar.number_input("预计养老金每年涨幅 (%)", value=1.5, step=0.5) / 100
 
 # --- 主界面：未来主业收入设定 ---
 st.subheader("💼 1. 设定你的未来【主业】收入路径")
@@ -162,19 +161,21 @@ for year in range(1, target_years + 1):
         annual_pension_income = current_pension * 12
         current_annual_income += annual_pension_income
         getting_pension = True
-        # 【V15.0 核心变更】：养老金独立涨幅（不再跟随 annual_inflation_rate）
         current_pension *= (1 + pension_growth_rate) 
 
     investment_profit = current_assets * annual_return_rate
     capital_preservation_need = current_assets * annual_inflation_rate
     real_passive_income = investment_profit - capital_preservation_need
     
+    # 【V16.0 核心逻辑更新】：纯粹 FIRE 的绝对判定
+    # 你的要求：实际理财收益 > 实际开支（不论有没有工资和养老金）
+    is_fi = real_passive_income >= actual_annual_expense
+    
+    # 依然保留最大可支配收入用于数据展示（这是一个很好的安全垫指标）
     max_disposable_income = real_passive_income + current_annual_income
-
-    is_fi = max_disposable_income >= (current_fire_expense * 12)
     
     if is_working:
-        status_text = "👑 财务自由(打工中)" if is_fi else "💼 资本积累期"
+        status_text = "👑 纯粹FIRE(打工中)" if is_fi else "💼 资本积累期"
     else:
         status_text = "🌴 永续 FIRE" if is_fi else "⚠️ 消耗本金中"
         
@@ -184,7 +185,6 @@ for year in range(1, target_years + 1):
             
     yearly_savings = current_annual_income - actual_annual_expense 
     current_assets = current_assets + investment_profit + yearly_savings
-    
     real_purchasing_power_assets = current_assets / ((1 + annual_inflation_rate) ** year)
     
     data_records.append({
@@ -192,14 +192,13 @@ for year in range(1, target_years + 1):
         "当年年龄": f"{this_year_age} 岁",
         "生命周期": status_text,
         "当年实际总收入(元)": round(current_annual_income, 2), 
-        "最大可支配收入(不伤本金)": round(max_disposable_income, 2), 
         "年度实际支出(元)": round(actual_annual_expense, 2),
-        "抗通胀真实收益(元)": round(real_passive_income, 2),
+        "抗通胀真实理财收益(元)": round(real_passive_income, 2), # 【V16.0 图表新核心】
+        "最大可支配收入(含主动收入)": round(max_disposable_income, 2), 
         "期末名义总资产(元)": round(current_assets, 2),
         "实际购买力资产(今日价值)": round(real_purchasing_power_assets, 2)
     })
     
-    # 日常物价依然跟随通胀暴涨
     current_monthly_expense *= (1 + annual_inflation_rate)
     current_fire_expense *= (1 + annual_inflation_rate)
 
@@ -210,9 +209,10 @@ st.subheader(f"📈 {user_name} 的 FIRE 路径深度解析")
 col_chart1, col_chart2 = st.columns(2)
 
 with col_chart1:
-    st.markdown("#### 📊 1. 现金流与 FIRE 交叉点")
-    st.markdown("当绿线（最大可支配收入）在红线（实际支出）上方时，你的财富在永续增长。")
-    st.line_chart(df_result, x="推演年份", y=["最大可支配收入(不伤本金)", "年度实际支出(元)"], color=["#00FF00", "#FF0000"])
+    st.markdown("#### 📊 1. 核心火力点：理财收益 vs 实际开支")
+    st.markdown("原教旨 FIRE 标准：**只看绿线（纯理财收益）能否彻底压制红线（实际支出）**。不看工资，不看养老金。")
+    # 【V16.0 图表更新】：直接对比抗通胀真实理财收益和年度实际支出
+    st.line_chart(df_result, x="推演年份", y=["抗通胀真实理财收益(元)", "年度实际支出(元)"], color=["#00FF00", "#FF0000"])
 
 with col_chart2:
     st.markdown("#### 🏦 2. 资产雪球效应 (名义 vs 真实)")
