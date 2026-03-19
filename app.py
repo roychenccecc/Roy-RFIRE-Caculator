@@ -1,5 +1,5 @@
 # ---------------------------------------------------
-# 你的第十六台 RFIRE 财富推演机 (V14.0 双图表与精准除错版)
+# 你的第十七台 RFIRE 财富推演机 (V15.0 极致现实与独立养老金版)
 # ---------------------------------------------------
 
 import streamlit as st
@@ -9,14 +9,14 @@ st.set_page_config(page_title="RFIRE 财富推演系统", page_icon="🔥", layo
 
 st.sidebar.header("👤 0. 定制你的专属计划")
 user_name = st.sidebar.text_input("请输入你的称呼：", value="探索者")
-st.title(f"🔥 {user_name} 的 RFIRE 财务路径推演系统 (V14.0)")
+st.title(f"🔥 {user_name} 的 RFIRE 财务路径推演系统 (V15.0 极致现实版)")
 
 with st.expander("💡 点击阅读：这套系统背后的硬核量化逻辑", expanded=False):
     st.markdown("""
     * **🛡️ 购买力平价：** 强制扣除通胀磨损，寻找真实的永续 FIRE 奇点。
     * **⚙️ 动态生命周期：** 引入真实年龄轴。彻底辞职后切换退休开支标准。
     * **⚖️ 命运平衡双轨：** 独立定制未来的黑天鹅(意外开支)与正向期权(意外收入)。
-    * **🌉 养老底座与双轨资产：** 引入法定养老金。分离“名义资产”与“真实购买力资产”，打破金钱的数字幻觉。
+    * **🌉 养老底座与真实涨幅：** 养老金涨幅与物价通胀彻底脱钩，直面商业年金购买力缩水或社保增速放缓的残酷现实。
     """)
 
 # --- 左侧边栏参数 ---
@@ -37,9 +37,11 @@ st.sidebar.header("📈 3. 市场与环境假设")
 annual_return_rate = st.sidebar.number_input("预期名义年化收益率 (%)", value=8.0, step=0.5) / 100
 annual_inflation_rate = st.sidebar.number_input("预计年通胀率 (%)", value=3.0, step=0.5) / 100
 
-st.sidebar.header("🛡️ 4. 养老金底座")
-monthly_pension = st.sidebar.number_input("预计退休金 (元/月, 当前物价)", value=3000, step=500)
+st.sidebar.header("🛡️ 4. 养老金底座 (硬核风控)")
+monthly_pension = st.sidebar.number_input("预计退休金基数 (元/月)", value=3000, step=500, help="指你开始领取那第一年的每月名义金额")
 pension_age = st.sidebar.number_input("法定领养老金年龄 (岁)", value=60, min_value=current_age, max_value=100)
+# 【V15.0 核心新增】：养老金独立涨幅
+pension_growth_rate = st.sidebar.number_input("预计养老金每年涨幅 (%)", value=1.5, step=0.5, help="社保通常在1%-4%，商业年金为0%") / 100
 
 # --- 主界面：未来主业收入设定 ---
 st.subheader("💼 1. 设定你的未来【主业】收入路径")
@@ -112,20 +114,18 @@ for index, row in edited_df.iterrows():
 
 st.divider()
 
-# --- 命运平衡面板 (V14.0：完美修复缺失的金额列) ---
+# --- 命运平衡面板 ---
 st.subheader("⚖️ 2. 命运平衡控制台 (意外开支 vs 额外收入)")
 col_risk, col_opp = st.columns(2)
 
 with col_risk:
     st.markdown("#### 🌪️ 黑天鹅事件 (意外支出)")
-    # 修复点：将金额列重新加入默认 DataFrame 中
     default_bs_df = pd.DataFrame({"发生时的年龄 (数字)": [45], "金额 (当前物价/元)": [100000.0]})
     edited_black_swans = st.data_editor(default_bs_df, num_rows="dynamic", use_container_width=True, hide_index=True, key="black_swan_table")
     black_swan_dict = {int(row["发生时的年龄 (数字)"]): float(row["金额 (当前物价/元)"]) for i, row in edited_black_swans.iterrows() if pd.notnull(row["发生时的年龄 (数字)"])}
 
 with col_opp:
     st.markdown("#### 🎁 正向期权 (额外收入)")
-    # 修复点：将金额列重新加入默认 DataFrame 中
     default_wf_df = pd.DataFrame({"发生时的年龄 (数字)": [38], "金额 (当前物价/元)": [30000.0]})
     edited_windfalls = st.data_editor(default_wf_df, num_rows="dynamic", use_container_width=True, hide_index=True, key="windfall_table")
     windfall_dict = {int(row["发生时的年龄 (数字)"]): float(row["金额 (当前物价/元)"]) for i, row in edited_windfalls.iterrows() if pd.notnull(row["发生时的年龄 (数字)"])}
@@ -162,6 +162,8 @@ for year in range(1, target_years + 1):
         annual_pension_income = current_pension * 12
         current_annual_income += annual_pension_income
         getting_pension = True
+        # 【V15.0 核心变更】：养老金独立涨幅（不再跟随 annual_inflation_rate）
+        current_pension *= (1 + pension_growth_rate) 
 
     investment_profit = current_assets * annual_return_rate
     capital_preservation_need = current_assets * annual_inflation_rate
@@ -183,8 +185,6 @@ for year in range(1, target_years + 1):
     yearly_savings = current_annual_income - actual_annual_expense 
     current_assets = current_assets + investment_profit + yearly_savings
     
-    # 【V14.0 核心逻辑】：计算“实际购买力资产”（剔除通胀水分后的真实价值）
-    # 假设你第 30 年有 1000 万，如果通胀是 3%，那这 1000 万只相当于今天的 411 万。
     real_purchasing_power_assets = current_assets / ((1 + annual_inflation_rate) ** year)
     
     data_records.append({
@@ -194,19 +194,18 @@ for year in range(1, target_years + 1):
         "当年实际总收入(元)": round(current_annual_income, 2), 
         "最大可支配收入(不伤本金)": round(max_disposable_income, 2), 
         "年度实际支出(元)": round(actual_annual_expense, 2),
-        "抗通胀真实理财收益(元)": round(real_passive_income, 2),
+        "抗通胀真实收益(元)": round(real_passive_income, 2),
         "期末名义总资产(元)": round(current_assets, 2),
-        "实际购买力资产(今日价值)": round(real_purchasing_power_assets, 2) # 【新增的真实资产列】
+        "实际购买力资产(今日价值)": round(real_purchasing_power_assets, 2)
     })
     
+    # 日常物价依然跟随通胀暴涨
     current_monthly_expense *= (1 + annual_inflation_rate)
     current_fire_expense *= (1 + annual_inflation_rate)
-    current_pension *= (1 + annual_inflation_rate) 
 
 # --- 结果展示与下载 ---
 df_result = pd.DataFrame(data_records)
 
-# 【V14.0 UI 升级】：双图表并行展示
 st.subheader(f"📈 {user_name} 的 FIRE 路径深度解析")
 col_chart1, col_chart2 = st.columns(2)
 
@@ -217,7 +216,7 @@ with col_chart1:
 
 with col_chart2:
     st.markdown("#### 🏦 2. 资产雪球效应 (名义 vs 真实)")
-    st.markdown("打破复利幻觉：蓝线是你账户上的钱，黄线是这笔钱在**今天**到底能买多少东西。")
+    st.markdown("打破复利幻觉：蓝线是你账户上的钱，黄线是这笔钱在**今天**的真实购买力。")
     st.line_chart(df_result, x="推演年份", y=["期末名义总资产(元)", "实际购买力资产(今日价值)"], color=["#4285F4", "#F4B400"])
 
 st.subheader("📋 详细推演数据大表")
