@@ -92,4 +92,103 @@ elif st.session_state.last_years != table_years:
     if table_years > current_len:
         # 增加年限：补齐背后的空白行（极其人性化的设计：直接复制最后一年的收入作为后续的默认值）
         last_income = current_df.iloc[-1]["预期月收入(元)"] if current_len > 0 else 20000.0
-        last
+        last_bonus = current_df.iloc[-1]["预期年终奖(元)"] if current_len > 0 else 50000.0
+        new_rows = []
+        for i in range(current_len, table_years):
+            new_rows.append({"工作年份": f"第 {i+1} 年", "预期月收入(元)": last_income, "预期年终奖(元)": last_bonus})
+        st.session_state.income_df = pd.concat([current_df, pd.DataFrame(new_rows)], ignore_index=True)
+        
+    elif table_years < current_len:
+        # 减少年限：直接砍掉多出的行数
+        st.session_state.income_df = current_df.head(table_years)
+
+# 4. 把当前状态存入保险箱，供下次对比使用
+st.session_state.last_mode = income_mode
+st.session_state.last_params = current_params
+st.session_state.last_years = table_years
+
+# 5. 展示表格，并把用户在网页上敲入的最新修改，实时存回保险箱
+st.markdown(f"👇 **你的打工生涯预计还有 {table_years} 年。你可以双击任意数字进行修改：**")
+edited_df = st.data_editor(st.session_state.income_df, use_container_width=True, hide_index=True)
+st.session_state.income_df = edited_df
+
+# 提取表格数据进入系统核心引擎
+yearly_total_income_list = []
+for index, row in edited_df.iterrows():
+    total_annual = (row["预期月收入(元)"] * 12) + row["预期年终奖(元)"]
+    yearly_total_income_list.append(total_annual)
+# ==========================================
+
+
+st.divider()
+
+# --- 核心推演逻辑 ---
+data_records = []
+current_assets = initial_assets
+current_monthly_expense = monthly_expense
+current_fire_expense = fire_monthly_expense 
+is_fired = False 
+
+for year in range(1, target_years + 1):
+    if year > max_working_years:
+        current_annual_income = 0
+    else:
+        current_annual_income = yearly_total_income_list[year - 1]
+
+    investment_profit = current_assets * annual_return_rate
+    capital_preservation_need = current_assets * annual_inflation_rate
+    real_passive_income = investment_profit - capital_preservation_need
+    
+    if real_passive_income >= (current_fire_expense * 12):
+        is_fired = True
+        
+    if is_fired:
+        yearly_savings = 0 
+        annual_expense = current_fire_expense * 12
+        status_text = "🌴 永续 FIRE"
+    else:
+        annual_expense = current_monthly_expense * 12
+        yearly_savings = current_annual_income - annual_expense 
+        if yearly_savings < 0:
+            status_text = "⚠️ 消耗本金"
+        else:
+            status_text = "💼 资本积累"
+            
+    current_assets = current_assets + investment_profit + yearly_savings
+    
+    data_records.append({
+        "推演年份": year, 
+        "生命周期": status_text,
+        "当年实际总收入(元)": round(current_annual_income, 2),
+        "总资产(元)": round(current_assets, 2),
+        "抗通胀后真实收益(元)": round(real_passive_income, 2),
+        "年度实际支出(元)": round(annual_expense, 2)
+    })
+    
+    current_monthly_expense *= (1 + annual_inflation_rate)
+    current_fire_expense *= (1 + annual_inflation_rate)
+
+# --- 结果展示与下载 ---
+df_result = pd.DataFrame(data_records)
+
+st.subheader(f"📈 {user_name} 的永续 RFIRE 交叉点分析图")
+st.line_chart(df_result, x="推演年份", y=["抗通胀后真实收益(元)", "年度实际支出(元)"], color=["#00FF00", "#FF0000"])
+
+st.subheader("📋 详细推演数据大表")
+df_result_display = df_result.copy()
+df_result_display["推演年份"] = df_result_display["推演年份"].apply(lambda x: f"第 {x} 年")
+st.dataframe(df_result_display, use_container_width=True)
+
+# 【V7.0 新增功能：一键导出 CSV】
+st.divider()
+st.markdown("### 💾 保存你的推演计划")
+# utf-8-sig 编码是为了保证国内用户用 Excel 打开时不出现中文乱码
+csv_data = df_result_display.to_csv(index=False).encode('utf-8-sig')
+
+st.download_button(
+    label=f"📥 一键下载【{user_name}的RFIRE推演计划.csv】",
+    data=csv_data,
+    file_name=f"{user_name}的RFIRE推演计划.csv",
+    mime="text/csv",
+    type="primary" # 把按钮变成显眼的红色/主色调
+)
