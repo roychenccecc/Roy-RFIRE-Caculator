@@ -1,5 +1,5 @@
 # ---------------------------------------------------
-# 你的第十五台 RFIRE 财富推演机 (V13.0 真实人生镜像版)
+# 你的第十六台 RFIRE 财富推演机 (V14.0 双图表与精准除错版)
 # ---------------------------------------------------
 
 import streamlit as st
@@ -9,17 +9,17 @@ st.set_page_config(page_title="RFIRE 财富推演系统", page_icon="🔥", layo
 
 st.sidebar.header("👤 0. 定制你的专属计划")
 user_name = st.sidebar.text_input("请输入你的称呼：", value="探索者")
-st.title(f"🔥 {user_name} 的 RFIRE 财务路径推演系统 (V13.0)")
+st.title(f"🔥 {user_name} 的 RFIRE 财务路径推演系统 (V14.0)")
 
 with st.expander("💡 点击阅读：这套系统背后的硬核量化逻辑", expanded=False):
     st.markdown("""
     * **🛡️ 购买力平价：** 强制扣除通胀磨损，寻找真实的永续 FIRE 奇点。
     * **⚙️ 动态生命周期：** 引入真实年龄轴。彻底辞职后切换退休开支标准。
     * **⚖️ 命运平衡双轨：** 独立定制未来的黑天鹅(意外开支)与正向期权(意外收入)。
-    * **🌉 养老底座与永续提款：** 引入法定养老金。新增【最大可支配收入】指标，精准测算“在不伤及本金购买力的前提下，今年最多能花多少钱”。
+    * **🌉 养老底座与双轨资产：** 引入法定养老金。分离“名义资产”与“真实购买力资产”，打破金钱的数字幻觉。
     """)
 
-# --- 左侧边栏：【V13.0 全新年龄逻辑】 ---
+# --- 左侧边栏参数 ---
 st.sidebar.header("📊 1. 个人与财富参数")
 current_age = st.sidebar.number_input("你的当前年龄 (岁)", value=30, min_value=18, max_value=100)
 retire_age = st.sidebar.number_input("计划退休年龄 (岁)", value=40, min_value=current_age, max_value=100)
@@ -27,7 +27,6 @@ target_age = st.sidebar.number_input("推演至多少岁？ (岁)", value=85, mi
 initial_assets = st.sidebar.number_input("初始资产 (元)", value=500000, step=50000)
 monthly_expense = st.sidebar.number_input("当前打工期月支出 (元)", value=8000, step=1000)
 
-# 后台自动计算需要推演的年份长度
 max_working_years = retire_age - current_age
 target_years = target_age - current_age
 
@@ -101,118 +100,3 @@ elif years_changed:
 st.session_state.last_mode = income_mode
 st.session_state.last_params = current_params
 st.session_state.last_years = table_years
-st.session_state.last_age = current_age
-
-edited_df = st.data_editor(st.session_state.base_df, key="income_table", use_container_width=True, hide_index=True)
-st.session_state.latest_edited_df = edited_df
-
-yearly_total_income_list = []
-for index, row in edited_df.iterrows():
-    total_annual = (row["主业月收入(元)"] * 12) + row["主业年终奖(元)"]
-    yearly_total_income_list.append(total_annual)
-
-st.divider()
-
-# --- 命运平衡面板 ---
-st.subheader("⚖️ 2. 命运平衡控制台 (意外开支 vs 额外收入)")
-col_risk, col_opp = st.columns(2)
-
-with col_risk:
-    st.markdown("#### 🌪️ 黑天鹅事件 (意外支出)")
-    edited_black_swans = st.data_editor(pd.DataFrame({"发生时的年龄 (数字)": [45]}, index=[0]), num_rows="dynamic", use_container_width=True, hide_index=True, key="black_swan_table")
-    # 【V13.0 更新】：黑天鹅按年龄查询
-    black_swan_dict = {int(row["发生时的年龄 (数字)"]): float(row.get("金额 (当前物价)", 100000.0)) for i, row in edited_black_swans.iterrows() if pd.notnull(row["发生时的年龄 (数字)"])}
-
-with col_opp:
-    st.markdown("#### 🎁 正向期权 (额外收入)")
-    edited_windfalls = st.data_editor(pd.DataFrame({"发生时的年龄 (数字)": [38]}, index=[0]), num_rows="dynamic", use_container_width=True, hide_index=True, key="windfall_table")
-    windfall_dict = {int(row["发生时的年龄 (数字)"]): float(row.get("金额 (当前物价)", 30000.0)) for i, row in edited_windfalls.iterrows() if pd.notnull(row["发生时的年龄 (数字)"])}
-
-st.divider()
-
-# --- 核心推演逻辑 ---
-data_records = []
-current_assets = initial_assets
-current_monthly_expense = monthly_expense
-current_fire_expense = fire_monthly_expense 
-current_pension = monthly_pension 
-
-for year in range(1, target_years + 1):
-    
-    # 【V13.0 核心】：计算当年的真实年龄
-    this_year_age = current_age + year
-    
-    is_working = this_year_age <= retire_age
-    current_annual_income = yearly_total_income_list[year - 1] if is_working else 0
-    base_annual_expense = (current_monthly_expense * 12) if is_working else (current_fire_expense * 12)
-    actual_annual_expense = base_annual_expense
-    
-    had_black_swan, had_windfall, getting_pension = False, False, False
-    
-    # 1. 结算意外开支与额外收入 (按年龄匹配)
-    if this_year_age in black_swan_dict:
-        actual_annual_expense += black_swan_dict[this_year_age] * ((1 + annual_inflation_rate) ** year)
-        had_black_swan = True
-    if this_year_age in windfall_dict:
-        current_annual_income += windfall_dict[this_year_age] * ((1 + annual_inflation_rate) ** year)
-        had_windfall = True
-
-    # 2. 养老金介入 (按法定年龄匹配)
-    annual_pension_income = 0
-    if this_year_age >= pension_age:
-        annual_pension_income = current_pension * 12
-        current_annual_income += annual_pension_income
-        getting_pension = True
-
-    # 3. 计算投资收益
-    investment_profit = current_assets * annual_return_rate
-    capital_preservation_need = current_assets * annual_inflation_rate
-    real_passive_income = investment_profit - capital_preservation_need
-    
-    # 4. 【V13.0 新增指标】：计算今年在不伤及本金购买力情况下的“最大可支配收入”
-    max_disposable_income = real_passive_income + current_annual_income
-
-    # 5. 判定状态
-    is_fi = max_disposable_income >= (current_fire_expense * 12)
-    
-    if is_working:
-        status_text = "👑 财务自由(打工中)" if is_fi else "💼 资本积累期"
-    else:
-        status_text = "🌴 永续 FIRE" if is_fi else "⚠️ 消耗本金中"
-        
-    if had_black_swan: status_text += " 🏥[暴击]"
-    if had_windfall: status_text += " 💰[外财]"
-    if getting_pension: status_text += " 💳[领养老金]"
-            
-    yearly_savings = current_annual_income - actual_annual_expense 
-    current_assets = current_assets + investment_profit + yearly_savings
-    
-    data_records.append({
-        "推演年份": year, 
-        "当年年龄": f"{this_year_age} 岁", # 【直击灵魂的新增列】
-        "生命周期": status_text,
-        "当年实际总收入(元)": round(current_annual_income, 2), 
-        "最大可支配收入(不伤本金)": round(max_disposable_income, 2), # 【你要求的永续指标】
-        "年度实际支出(元)": round(actual_annual_expense, 2),
-        "抗通胀真实理财收益(元)": round(real_passive_income, 2),
-        "期末总资产(元)": round(current_assets, 2)
-    })
-    
-    current_monthly_expense *= (1 + annual_inflation_rate)
-    current_fire_expense *= (1 + annual_inflation_rate)
-    current_pension *= (1 + annual_inflation_rate) 
-
-# --- 结果展示与下载 ---
-df_result = pd.DataFrame(data_records)
-
-st.subheader(f"📈 {user_name} 的永续 RFIRE 交叉点分析图")
-# 选取最核心的三个指标进行可视化对比
-st.line_chart(df_result, x="推演年份", y=["最大可支配收入(不伤本金)", "年度实际支出(元)"], color=["#00FF00", "#FF0000"])
-
-st.subheader("📋 详细推演数据大表")
-st.dataframe(df_result, use_container_width=True)
-
-st.divider()
-st.markdown("### 💾 保存你的推演计划")
-csv_data = df_result.to_csv(index=False).encode('utf-8-sig')
-st.download_button("📥 一键下载【推演计划.csv】", data=csv_data, file_name=f"{user_name}的推演计划.csv", mime="text/csv", type="primary")
