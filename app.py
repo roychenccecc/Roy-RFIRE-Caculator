@@ -100,3 +100,130 @@ elif years_changed:
 st.session_state.last_mode = income_mode
 st.session_state.last_params = current_params
 st.session_state.last_years = table_years
+st.session_state.last_age = current_age
+
+edited_df = st.data_editor(st.session_state.base_df, key="income_table", use_container_width=True, hide_index=True)
+st.session_state.latest_edited_df = edited_df
+
+yearly_total_income_list = []
+for index, row in edited_df.iterrows():
+    total_annual = (row["主业月收入(元)"] * 12) + row["主业年终奖(元)"]
+    yearly_total_income_list.append(total_annual)
+
+st.divider()
+
+# --- 命运平衡面板 (V14.0：完美修复缺失的金额列) ---
+st.subheader("⚖️ 2. 命运平衡控制台 (意外开支 vs 额外收入)")
+col_risk, col_opp = st.columns(2)
+
+with col_risk:
+    st.markdown("#### 🌪️ 黑天鹅事件 (意外支出)")
+    # 修复点：将金额列重新加入默认 DataFrame 中
+    default_bs_df = pd.DataFrame({"发生时的年龄 (数字)": [45], "金额 (当前物价/元)": [100000.0]})
+    edited_black_swans = st.data_editor(default_bs_df, num_rows="dynamic", use_container_width=True, hide_index=True, key="black_swan_table")
+    black_swan_dict = {int(row["发生时的年龄 (数字)"]): float(row["金额 (当前物价/元)"]) for i, row in edited_black_swans.iterrows() if pd.notnull(row["发生时的年龄 (数字)"])}
+
+with col_opp:
+    st.markdown("#### 🎁 正向期权 (额外收入)")
+    # 修复点：将金额列重新加入默认 DataFrame 中
+    default_wf_df = pd.DataFrame({"发生时的年龄 (数字)": [38], "金额 (当前物价/元)": [30000.0]})
+    edited_windfalls = st.data_editor(default_wf_df, num_rows="dynamic", use_container_width=True, hide_index=True, key="windfall_table")
+    windfall_dict = {int(row["发生时的年龄 (数字)"]): float(row["金额 (当前物价/元)"]) for i, row in edited_windfalls.iterrows() if pd.notnull(row["发生时的年龄 (数字)"])}
+
+st.divider()
+
+# --- 核心推演逻辑 ---
+data_records = []
+current_assets = initial_assets
+current_monthly_expense = monthly_expense
+current_fire_expense = fire_monthly_expense 
+current_pension = monthly_pension 
+
+for year in range(1, target_years + 1):
+    
+    this_year_age = current_age + year
+    
+    is_working = this_year_age <= retire_age
+    current_annual_income = yearly_total_income_list[year - 1] if is_working else 0
+    base_annual_expense = (current_monthly_expense * 12) if is_working else (current_fire_expense * 12)
+    actual_annual_expense = base_annual_expense
+    
+    had_black_swan, had_windfall, getting_pension = False, False, False
+    
+    if this_year_age in black_swan_dict:
+        actual_annual_expense += black_swan_dict[this_year_age] * ((1 + annual_inflation_rate) ** year)
+        had_black_swan = True
+    if this_year_age in windfall_dict:
+        current_annual_income += windfall_dict[this_year_age] * ((1 + annual_inflation_rate) ** year)
+        had_windfall = True
+
+    annual_pension_income = 0
+    if this_year_age >= pension_age:
+        annual_pension_income = current_pension * 12
+        current_annual_income += annual_pension_income
+        getting_pension = True
+
+    investment_profit = current_assets * annual_return_rate
+    capital_preservation_need = current_assets * annual_inflation_rate
+    real_passive_income = investment_profit - capital_preservation_need
+    
+    max_disposable_income = real_passive_income + current_annual_income
+
+    is_fi = max_disposable_income >= (current_fire_expense * 12)
+    
+    if is_working:
+        status_text = "👑 财务自由(打工中)" if is_fi else "💼 资本积累期"
+    else:
+        status_text = "🌴 永续 FIRE" if is_fi else "⚠️ 消耗本金中"
+        
+    if had_black_swan: status_text += " 🏥[暴击]"
+    if had_windfall: status_text += " 💰[外财]"
+    if getting_pension: status_text += " 💳[领养老金]"
+            
+    yearly_savings = current_annual_income - actual_annual_expense 
+    current_assets = current_assets + investment_profit + yearly_savings
+    
+    # 【V14.0 核心逻辑】：计算“实际购买力资产”（剔除通胀水分后的真实价值）
+    # 假设你第 30 年有 1000 万，如果通胀是 3%，那这 1000 万只相当于今天的 411 万。
+    real_purchasing_power_assets = current_assets / ((1 + annual_inflation_rate) ** year)
+    
+    data_records.append({
+        "推演年份": year, 
+        "当年年龄": f"{this_year_age} 岁",
+        "生命周期": status_text,
+        "当年实际总收入(元)": round(current_annual_income, 2), 
+        "最大可支配收入(不伤本金)": round(max_disposable_income, 2), 
+        "年度实际支出(元)": round(actual_annual_expense, 2),
+        "抗通胀真实理财收益(元)": round(real_passive_income, 2),
+        "期末名义总资产(元)": round(current_assets, 2),
+        "实际购买力资产(今日价值)": round(real_purchasing_power_assets, 2) # 【新增的真实资产列】
+    })
+    
+    current_monthly_expense *= (1 + annual_inflation_rate)
+    current_fire_expense *= (1 + annual_inflation_rate)
+    current_pension *= (1 + annual_inflation_rate) 
+
+# --- 结果展示与下载 ---
+df_result = pd.DataFrame(data_records)
+
+# 【V14.0 UI 升级】：双图表并行展示
+st.subheader(f"📈 {user_name} 的 FIRE 路径深度解析")
+col_chart1, col_chart2 = st.columns(2)
+
+with col_chart1:
+    st.markdown("#### 📊 1. 现金流与 FIRE 交叉点")
+    st.markdown("当绿线（最大可支配收入）在红线（实际支出）上方时，你的财富在永续增长。")
+    st.line_chart(df_result, x="推演年份", y=["最大可支配收入(不伤本金)", "年度实际支出(元)"], color=["#00FF00", "#FF0000"])
+
+with col_chart2:
+    st.markdown("#### 🏦 2. 资产雪球效应 (名义 vs 真实)")
+    st.markdown("打破复利幻觉：蓝线是你账户上的钱，黄线是这笔钱在**今天**到底能买多少东西。")
+    st.line_chart(df_result, x="推演年份", y=["期末名义总资产(元)", "实际购买力资产(今日价值)"], color=["#4285F4", "#F4B400"])
+
+st.subheader("📋 详细推演数据大表")
+st.dataframe(df_result, use_container_width=True)
+
+st.divider()
+st.markdown("### 💾 保存你的推演计划")
+csv_data = df_result.to_csv(index=False).encode('utf-8-sig')
+st.download_button("📥 一键下载【推演计划.csv】", data=csv_data, file_name=f"{user_name}的推演计划.csv", mime="text/csv", type="primary")
